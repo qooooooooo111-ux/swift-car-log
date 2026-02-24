@@ -50,14 +50,23 @@ if current_km == 0: current_km = 150000
 st.sidebar.header("📝 新增雲端紀錄")
 input_type = st.sidebar.radio("選擇操作", ["記錄加油", "記錄維修/改裝"])
 
-if input_type == "記錄加油":
+elif input_type == "記錄加油":
     f_date = st.sidebar.date_input("日期", datetime.now()).strftime("%Y-%m-%d")
     f_km = st.sidebar.number_input("加油時里程", value=int(current_km))
-    f_liters = st.sidebar.number_input("加了幾公升", value=30.0)
-    f_price = st.sidebar.number_input("單價 (元/公升)", value=30.0)
+    
+    # 改成輸入公升數與「總價」
+    f_liters = st.sidebar.number_input("加了幾公升 (L)", value=30.00, step=1.0)
+    f_total = st.sidebar.number_input("總花費 (元)", value=1000, step=10)
+    
+    # 讓電腦自動反推單價 (四捨五入到小數點第二位)
+    f_price = round(f_total / f_liters, 2) if f_liters > 0 else 0
+    
+    # 貼心提示：顯示反推出來的單價給車主看
+    st.sidebar.info(f"💡 系統換算單價： {f_price} 元/公升")
     
     if st.sidebar.button("上傳加油紀錄"):
-        new_row = [f_date, f_km, f_liters, f_price, int(f_liters * f_price)]
+        # 存入資料庫時，把算好的單價(f_price)跟總價(f_total)寫進去
+        new_row = [f_date, f_km, f_liters, f_price, int(f_total)]
         sheet_fuel.append_row(new_row)
         st.sidebar.success("✅ 上傳成功！")
         st.rerun()
@@ -192,3 +201,4 @@ with tab2:
         st.dataframe(df_fuel.sort_values(by="里程", ascending=False), use_container_width=True)
     else:
         st.info("目前還沒有加油紀錄，請從左側新增。")
+
