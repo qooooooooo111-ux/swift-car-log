@@ -50,7 +50,7 @@ if current_km == 0: current_km = 150000
 st.sidebar.header("📝 新增雲端紀錄")
 input_type = st.sidebar.radio("選擇操作", ["記錄加油", "記錄維修/改裝"])
 
-elif input_type == "記錄加油":
+if input_type == "記錄加油":
     f_date = st.sidebar.date_input("日期", datetime.now()).strftime("%Y-%m-%d")
     f_km = st.sidebar.number_input("加油時里程", value=int(current_km))
     
@@ -201,4 +201,5 @@ with tab2:
         st.dataframe(df_fuel.sort_values(by="里程", ascending=False), use_container_width=True)
     else:
         st.info("目前還沒有加油紀錄，請從左側新增。")
+
 
