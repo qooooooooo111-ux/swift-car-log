@@ -82,72 +82,88 @@ st.caption("資料來源：Google Sheets")
 st.markdown(f"### 最新里程： `{current_km:,} km`")
 st.markdown("---")
 
-# --- 核心功能：零件壽命健康度監控 (邏輯不變) ---
-st.subheader("⚠️ 零件健康度監控")
+# --- 核心功能：零件壽命健康度監控 (雙重條件：里程 + 時間) ---
+st.subheader("⚠️ 零件健康度監控 (里程與時間雙重把關)")
+
+# 定義零件建議壽命：同時包含「公里數(km)」與「幾個月(months)」
+# 你可以隨時在這裡新增或修改項目！
 parts_lifespan = {
-    "機油": 5000,
-    "變速箱油": 20000,
-    "輪胎": 40000,
-    "火星塞": 30000,
-    "煞車油": 40000,
-    "冷卻水": 20000
+    "機油": {"km": 5000, "months": 6},
+    "變速箱油": {"km": 20000, "months": 24},
+    "輪胎": {"km": 40000, "months": 36},
+    "火星塞": {"km": 30000, "months": 24},
+    "電瓶": {"km": 40000, "months": 24},   # 電瓶非常受時間影響
+    "雨刷": {"km": 10000, "months": 12},   # 雨刷膠條會隨時間硬化
+    "冷氣濾網": {"km": 10000, "months": 12},
+    "空氣濾網": {"km": 20000, "months": 24}
 }
 
 latest_changes = {}
 if not df_maint.empty:
-    # 確保里程是數字格式
+    # 確保里程是數字，並把「日期」轉換成系統能看懂的時間格式
     df_maint["里程"] = pd.to_numeric(df_maint["里程"], errors='coerce').fillna(0)
+    df_maint["日期"] = pd.to_datetime(df_maint["日期"], errors='coerce')
     
     for part in parts_lifespan.keys():
+        # 搜尋包含該零件名稱的紀錄
         part_records = df_maint[df_maint["項目"].astype(str).str.contains(part, na=False)]
         if not part_records.empty:
-            last_km = part_records["里程"].max()
-            latest_changes[part] = last_km
+            # 找出最新（里程最大）的那一筆紀錄
+            latest_record = part_records.sort_values(by="里程", ascending=False).iloc[0]
+            latest_changes[part] = {
+                "last_km": latest_record["里程"],
+                "last_date": latest_record["日期"]
+            }
         else:
-            latest_changes[part] = 0
+            latest_changes[part] = None
 
 cols = st.columns(2)
-for i, (part, lifespan) in enumerate(parts_lifespan.items()):
-    last_km = latest_changes.get(part, 0)
+today = pd.to_datetime('today')
+
+for i, (part, limits) in enumerate(parts_lifespan.items()):
+    record = latest_changes.get(part)
     
-    if last_km == 0:
+    # 如果完全沒紀錄
+    if record is None or pd.isna(record["last_date"]):
         with cols[i % 2]:
             st.warning(f"**{part}** - 尚無紀錄")
         continue
 
+    last_km = record["last_km"]
+    last_date = record["last_date"]
+    
+    # 1. 計算【里程】消耗比例
     used_km = current_km - last_km
     if used_km < 0: used_km = 0
-    usage_percent = used_km / lifespan
+    usage_percent_km = used_km / limits["km"]
     
+    # 2. 計算【時間】消耗比例 (以 30.4 天為一個月計算)
+    days_passed = (today - last_date).days
+    used_months = days_passed / 30.4
+    if used_months < 0: used_months = 0
+    usage_percent_time = used_months / limits["months"]
+    
+    # 3. 殘酷二選一：取消耗比例較高的那個當作標準
+    is_time_critical = usage_percent_time > usage_percent_km
+    usage_percent = max(usage_percent_km, usage_percent_time)
+    
+    # 決定顏色與狀態
     status_emoji = "✅"
     if usage_percent > 0.8: status_emoji = "⚠️"
     if usage_percent >= 1.0: status_emoji = "❌"
     
-    # 限制進度條最大 100%
     display_percent = min(usage_percent, 1.0)
+    
+    # 顯示原因：告訴車主是因為里程到了，還是時間到了
+    if is_time_critical:
+        reason_text = f"已過 {int(used_months)} 個月 (建議 {limits['months']} 個月換)"
+    else:
+        reason_text = f"已跑 {int(used_km)} km (建議 {limits['km']} km 換)"
 
     with cols[i % 2]:
         st.write(f"**{part}** ({status_emoji})")
-        st.progress(display_percent, text=f"已跑 {used_km} / {lifespan} km")
+        st.progress(display_percent, text=reason_text)
         if usage_percent >= 1.0:
-            st.error(f"該換了！")
+            st.error(f"該換了！ ({reason_text})")
 
 st.markdown("---")
-
-# --- 歷史紀錄顯示 ---
-tab1, tab2 = st.tabs(["🔧 保養紀錄", "⛽ 加油紀錄"])
-
-with tab1:
-    st.dataframe(df_maint, use_container_width=True)
-
-with tab2:
-    if not df_fuel.empty:
-        df_fuel["里程"] = pd.to_numeric(df_fuel["里程"], errors='coerce')
-        df_fuel["公升數"] = pd.to_numeric(df_fuel["公升數"], errors='coerce')
-        
-        total_dist = df_fuel["里程"].max() - df_fuel["里程"].min()
-        total_liters = df_fuel["公升數"].sum()
-        avg_km_l = total_dist / total_liters if total_liters > 0 and total_dist > 0 else 0
-        
-        st.metric("估計平均油耗", f"{avg_km_l:.2f} km/L")
-    st.dataframe(df_fuel, use_container_width=True)
