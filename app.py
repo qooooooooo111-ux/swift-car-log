@@ -167,3 +167,28 @@ for i, (part, limits) in enumerate(parts_lifespan.items()):
             st.error(f"該換了！ ({reason_text})")
 
 st.markdown("---")
+# --- 歷史紀錄顯示 ---
+tab1, tab2 = st.tabs(["🔧 保養紀錄", "⛽ 加油紀錄"])
+
+with tab1:
+    if not df_maint.empty:
+        st.dataframe(df_maint.sort_values(by="里程", ascending=False), use_container_width=True)
+    else:
+        st.info("目前還沒有保養紀錄，請從左側新增。")
+
+with tab2:
+    if not df_fuel.empty:
+        # 計算油耗
+        df_fuel["里程"] = pd.to_numeric(df_fuel["里程"], errors='coerce')
+        df_fuel["公升數"] = pd.to_numeric(df_fuel["公升數"], errors='coerce')
+        total_dist = df_fuel["里程"].max() - df_fuel["里程"].min()
+        total_liters = df_fuel["公升數"].sum()
+        avg_km_l = total_dist / total_liters if total_liters > 0 and total_dist > 0 else 0
+        
+        col_fuel_1, col_fuel_2 = st.columns(2)
+        col_fuel_1.metric("估計平均油耗", f"{avg_km_l:.2f} km/L")
+        col_fuel_2.metric("總加油花費", f"${df_fuel['總價'].sum():,}")
+        
+        st.dataframe(df_fuel.sort_values(by="里程", ascending=False), use_container_width=True)
+    else:
+        st.info("目前還沒有加油紀錄，請從左側新增。")
