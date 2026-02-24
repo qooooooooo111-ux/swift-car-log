@@ -105,6 +105,7 @@ parts_lifespan = {
     "雨刷": {"km": 10000, "months": 12},   # 雨刷膠條會隨時間硬化
     "冷氣濾網": {"km": 10000, "months": 12},
     "空氣濾網": {"km": 20000, "months": 24}
+    "引擎腳": {"km": 80000, "months": 60}
 }
 
 latest_changes = {}
@@ -201,5 +202,6 @@ with tab2:
         st.dataframe(df_fuel.sort_values(by="里程", ascending=False), use_container_width=True)
     else:
         st.info("目前還沒有加油紀錄，請從左側新增。")
+
 
 
